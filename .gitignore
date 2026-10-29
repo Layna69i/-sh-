@@ -1,0 +1,14 @@
+node_modules
+dist
+.env
+.env.local
+*.log
+.DS_Store
+
+# outils et caches locaux
+.claude/
+.vite/
+*.tsbuildinfo
+.firebase/
+.vscode/
+Thumbs.db

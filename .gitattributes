@@ -1,0 +1,6 @@
+# fins de ligne : LF dans le dépôt (scripts PowerShell en CRLF)
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.jpg binary
+*.png binary
+*.webp binary

@@ -1,0 +1,120 @@
+rules_version = '2';
+
+// Règles de sécurité d'Ōshō — L'École des Ombres.
+// Les permissions sont portées par le grade (collection `ranks`) de la fiche
+// membre `members/{uid}` de l'utilisateur connecté. Masquer un bouton dans
+// l'interface ne protège rien : ce sont ces règles qui font foi.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function memberPath() { return /databases/$(database)/documents/members/$(request.auth.uid); }
+    function isMember() { return signedIn() && exists(memberPath()); }
+    function member() { return get(memberPath()).data; }
+    function rank() { return get(/databases/$(database)/documents/ranks/$(member().rankId)).data; }
+    function clearance() { return isMember() ? rank().clearance : 0; }
+    function can(p) { return isMember() && (p in rank().permissions); }
+    function validLevel(l) { return l is int && l >= 0 && l <= 4; }
+    function onlyChanges(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+
+    // Grades : hiérarchie publique, modification par la direction uniquement.
+    match /ranks/{id} {
+      allow read: if true;
+      allow write: if can('ranks.manage');
+    }
+
+    // Annuaire des membres : public. Un membre peut retoucher sa présentation,
+    // jamais son grade ni le lien vers son compte.
+    match /members/{id} {
+      allow read: if true;
+      allow create, delete: if can('members.manage');
+      allow update: if can('members.manage')
+        || (signedIn() && request.auth.uid == id
+            && onlyChanges(['description', 'specialty', 'avatarUrl', 'village', 'clan']));
+    }
+
+    // Annonces : visibles selon l'habilitation.
+    match /announcements/{id} {
+      allow read: if resource.data.clearance <= clearance();
+      allow create, update: if can('announcements.manage')
+        && validLevel(request.resource.data.clearance)
+        && request.resource.data.clearance <= clearance();
+      allow delete: if can('announcements.manage');
+    }
+
+    // Archives : lecture et écriture bornées par l'habilitation.
+    match /archives/{id} {
+      allow read: if resource.data.clearance <= clearance();
+      allow create: if can('archives.write')
+        && validLevel(request.resource.data.clearance)
+        && request.resource.data.clearance <= clearance();
+      allow update: if can('archives.write')
+        && resource.data.clearance <= clearance()
+        && validLevel(request.resource.data.clearance)
+        && request.resource.data.clearance <= clearance();
+      allow delete: if can('archives.write') && resource.data.clearance <= clearance();
+    }
+
+    // Enseignements : publics ou réservés aux membres.
+    match /courses/{id} {
+      allow read: if resource.data.visibility == 'public' || isMember();
+      allow write: if can('courses.manage');
+    }
+
+    // Inscriptions : identifiant imposé `${courseId}_${uid}`.
+    match /enrollments/{id} {
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || can('courses.manage'));
+      allow create: if can('courses.enroll')
+        && request.resource.data.uid == request.auth.uid
+        && id == request.resource.data.courseId + '_' + request.auth.uid
+        && request.resource.data.completed.size() == 0;
+      allow update: if signedIn() && resource.data.uid == request.auth.uid && onlyChanges(['completed']);
+      allow delete: if signedIn() && (resource.data.uid == request.auth.uid || can('courses.manage'));
+    }
+
+    // Missions : visibles selon l'habilitation, gérées par les responsables.
+    match /missions/{id} {
+      allow read: if resource.data.clearance <= clearance();
+      allow write: if can('missions.manage');
+    }
+
+    match /missionApplications/{id} {
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || can('missions.manage'));
+      allow create: if can('missions.apply')
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'en_attente';
+      allow update, delete: if can('missions.manage');
+    }
+
+    // Rapports : rédigés par les participants, validés par les responsables.
+    match /reports/{id} {
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || can('missions.manage'));
+      allow create: if isMember()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.validation == 'soumis'
+        && (can('missions.manage')
+            || request.auth.uid in get(/databases/$(database)/documents/missions/$(request.resource.data.missionId)).data.participantUids);
+      allow update, delete: if can('missions.manage');
+    }
+
+    // Candidatures : dépôt ouvert (y compris aux visiteurs), lecture et
+    // décision réservées aux examinateurs. Les notes restent privées.
+    match /candidatures/{id} {
+      allow create: if request.resource.data.status == 'en_attente'
+        && request.resource.data.notes.size() == 0
+        && request.resource.data.characterName is string
+        && request.resource.data.characterName.size() > 1
+        && request.resource.data.characterName.size() <= 80
+        && request.resource.data.motivations.size() <= 3000;
+      allow read, update, delete: if can('applications.review');
+    }
+
+    // Plans de la table stratégique.
+    match /plans/{id} {
+      allow read: if signedIn() && (resource.data.ownerUid == request.auth.uid || (resource.data.shared == true && isMember()));
+      allow create: if can('strategy.use') && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if signedIn() && resource.data.ownerUid == request.auth.uid && request.resource.data.ownerUid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+  }
+}
