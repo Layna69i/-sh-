@@ -47,12 +47,14 @@ export default function App() {
 
   useEffect(() => setDpr(renderDpr(Q, 1)), [Q])
 
-  useEffect(() => {
-  const appliquer = (s) => audio.setVolumes({ master: 0, ambience: s.ambience, music: s.music, muted: s.muted })
-  appliquer(useSettings.getState())
+useEffect(() => {
+  const appliquer = () => {
+    const s = useSettings.getState()
+    audio.setVolumes({ master: 0, ambience: s.ambience, music: s.music, muted: s.muted })
+  }
+  appliquer()
   return useSettings.subscribe(appliquer)
 }, [])
-
   return (
     <div className="fixed inset-0 bg-ink">
       <MusiqueFond />
