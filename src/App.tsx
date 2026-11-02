@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useState } from 'react'
+import MusiqueFond from "./MusiqueFond";
 import * as THREE from 'three'
 import { Canvas } from '@react-three/fiber'
 import { PerformanceMonitor } from '@react-three/drei'
