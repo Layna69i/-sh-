@@ -47,12 +47,11 @@ export default function App() {
 
   useEffect(() => setDpr(renderDpr(Q, 1)), [Q])
 
-  // Volumes audio synchronisés avec les réglages
-  useEffect(
-    () =>
-      useSettings.subscribe((s) => audio.setVolumes({ master: s.volume, ambience: s.ambience, music: s.music, muted: s.muted })),
-    [],
-  )
+  useEffect(() => {
+  const appliquer = (s) => audio.setVolumes({ master: 0, ambience: s.ambience, music: s.music, muted: s.muted })
+  appliquer(useSettings.getState())
+  return useSettings.subscribe(appliquer)
+}, [])
 
   return (
     <div className="fixed inset-0 bg-ink">
