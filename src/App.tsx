@@ -56,6 +56,7 @@ export default function App() {
 
   return (
     <div className="fixed inset-0 bg-ink">
+      <MusiqueFond />
       {assetsOk && (
         <Canvas
           key={quality}
